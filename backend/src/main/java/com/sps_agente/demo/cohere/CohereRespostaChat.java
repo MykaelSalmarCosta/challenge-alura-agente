@@ -1,6 +1,7 @@
 package com.sps_agente.demo.cohere;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.fasterxml.jackson.annotation.JsonProperty;
 
 import java.util.List;
 
@@ -21,10 +22,12 @@ public record CohereRespostaChat(String id, Message message, Usage usage) {
     }
 
     @JsonIgnoreProperties(ignoreUnknown = true)
-    public record Tokens(Integer inputTokens, Integer outputTokens) {
+    public record Tokens(
+            @JsonProperty("input_tokens") Integer inputTokens,
+            @JsonProperty("output_tokens") Integer outputTokens) {
     }
 
-    
+
     public String texto() {
         if (message == null || message.content() == null) return "";
         return message.content().stream()
@@ -34,7 +37,7 @@ public record CohereRespostaChat(String id, Message message, Usage usage) {
                 .orElse("");
     }
 
-    
+
     public int tokensConsumidos() {
         if (usage == null || usage.tokens() == null) return 0;
         int in = usage.tokens().inputTokens() != null ? usage.tokens().inputTokens() : 0;
