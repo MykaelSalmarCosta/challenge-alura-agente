@@ -26,7 +26,7 @@ O colaborador faz uma pergunta no chat e o agente:
 
 **LLM:** Cohere (chat, embeddings e rerank via API v2)
 
-**Deploy:** OCI Compute (VM Always Free)
+**Deploy:** Render (Docker) + OCI Object Storage
 
 ## Arquitetura
 
@@ -54,7 +54,7 @@ O índice vetorial vive em memória e é reconstruído no startup — decisão c
 1. Clone o repositório:
 
 ```bash
-git clone https://github.com/MykaelSalmarCosta/challenge-alura_agente.git
+git clone https://github.com/MykaelSalmarCosta/challenge-alura-agente.git
 cd challenge-alura_agente
 ```
 
@@ -110,6 +110,49 @@ Os PDFs ficam na pasta `backend/documentos/` e são indexados automaticamente no
 - Manual Maestro de Resiliência e Resposta a Incidentes
 
 Para adicionar novos documentos, basta colocar o PDF na pasta e reiniciar a aplicação.
+
+## Deploy em nuvem
+
+A aplicação roda em produção em **https://sps-agente.onrender.com**.
+
+**Render (backend + frontend):** o Dockerfile multi-stage faz o build do React e do Spring Boot num único container. O Render detecta o Dockerfile, builda e deploia automaticamente a cada push no GitHub.
+
+**OCI Object Storage:** os documentos da base de conhecimento ficam em um bucket público na Oracle Cloud (região São Paulo). No startup, o backend baixa os PDFs do bucket via HTTP e indexa em memória — desacoplando os documentos do deploy.
+
+**Observabilidade:** cada requisição loga os tokens consumidos pela Cohere, a pergunta feita e o tempo de resposta. Os logs ficam disponíveis no dashboard do Render.
+
+**Fluxo de startup em produção:**
+1. Container inicia no Render
+2. `OciDocumentosProvider` baixa os 5 PDFs do bucket OCI Object Storage
+3. PDFBox extrai o texto, `Chunker` fatia em trechos
+4. Cohere gera embeddings e o `IndiceVetorial` é construído em memória
+5. Backend pronto para receber requisições na porta 8080
+
+| Variável de ambiente | Descrição |
+|---|---|
+| `COHERE_API_KEY` | Chave da API Cohere |
+| `OCI_OS_NAMESPACE` | Namespace do tenancy OCI |
+| `OCI_OS_BUCKET` | Nome do bucket |
+| `OCI_OS_REGION` | Região OCI (padrão: `sa-saopaulo-1`) |
+| `OCI_OS_ARQUIVOS` | Nomes dos PDFs separados por vírgula |
+
+## Evidências de execução em nuvem
+
+### Chat respondendo perguntas dos colaboradores
+
+![Chat com respostas do RAG](docs/evidencias/chat-respostas.png)
+
+### Fallback para perguntas fora do escopo
+
+![Fallback direcionando ao canal correto](docs/evidencias/chat-fallback.png)
+
+### Logs de execução no Render
+
+![Logs mostrando download dos PDFs, indexação e consumo de tokens](docs/evidencias/render-logs.png)
+
+### Documentos no OCI Object Storage
+
+![Bucket público com os 5 PDFs da base de conhecimento](docs/evidencias/oci-bucket.png)
 
 ## Decisoes de projeto
 
