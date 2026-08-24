@@ -1,0 +1,85 @@
+package com.sps_agente.demo.rag;
+
+import com.sps_agente.demo.cohere.CohereClient;
+
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.List;
+
+
+public class IndiceVetorial {
+
+    private final CohereClient cohere;
+    private final List<String> trechos = new ArrayList<>();
+    private final List<double[]> vetores = new ArrayList<>();
+
+    public IndiceVetorial(CohereClient cohere) {
+        this.cohere = cohere;
+    }
+
+    
+    public void indexar(List<String> novosTrechos) {
+        if (novosTrechos.isEmpty()) return;
+
+        int tamanhoDeLote = 96;
+        for (int i = 0; i < novosTrechos.size(); i += tamanhoDeLote) {
+            List<String> lote = novosTrechos.subList(i, Math.min(i + tamanhoDeLote, novosTrechos.size()));
+            var resposta = cohere.embedDocumentos(lote);
+            var vetoresDoLote = resposta.vetores();
+
+            trechos.addAll(lote);
+            vetores.addAll(vetoresDoLote);
+        }
+
+        System.out.printf("[IndiceVetorial] %d trechos indexados (%d dimensões)%n",
+                trechos.size(),
+                vetores.isEmpty() ? 0 : vetores.getFirst().length);
+    }
+
+    
+    public List<String> buscar(String pergunta, int topK) {
+        var respostaEmbed = cohere.embedPergunta(pergunta);
+        var vetoresPergunta = respostaEmbed.vetores();
+        if (vetoresPergunta.isEmpty()) return List.of();
+
+        double[] vetorPergunta = vetoresPergunta.getFirst();
+
+        record Pontuado(int indice, double similaridade) {}
+
+        return trechos.stream()
+                .map(t -> {
+                    int idx = trechos.indexOf(t);
+                    double sim = cossenoSimilaridade(vetorPergunta, vetores.get(idx));
+                    return new Pontuado(idx, sim);
+                })
+                .sorted(Comparator.comparingDouble(Pontuado::similaridade).reversed())
+                .limit(topK)
+                .map(p -> trechos.get(p.indice()))
+                .toList();
+    }
+
+    
+    static double cossenoSimilaridade(double[] a, double[] b) {
+        double produtoEscalar = 0.0;
+        double normaA = 0.0;
+        double normaB = 0.0;
+
+        for (int i = 0; i < a.length; i++) {
+            produtoEscalar += a[i] * b[i];
+            normaA += a[i] * a[i];
+            normaB += b[i] * b[i];
+        }
+
+        double denominador = Math.sqrt(normaA) * Math.sqrt(normaB);
+        if (denominador == 0.0) return 0.0;
+        return produtoEscalar / denominador;
+    }
+
+    public int tamanho() {
+        return trechos.size();
+    }
+
+    public boolean vazio() {
+        return trechos.isEmpty();
+    }
+}
